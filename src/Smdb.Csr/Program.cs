@@ -1,4 +1,4 @@
-﻿namespace Smdb.Api;
+﻿namespace Smdb.Csr;
 
 public class Program
 {
