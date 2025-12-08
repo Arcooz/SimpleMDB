@@ -43,7 +43,7 @@ jobs:
       - name: Checkout Shared Library (SharedLibrary)
         uses: actions/checkout@v4
         with:
-          repository: hbruckman/SharedLibrary
+          repository: Arcooz/SharedLibrary
           token: ${{ secrets.SL_ACCESS_TOKEN }}
           path: projects/SharedLibrary
 
