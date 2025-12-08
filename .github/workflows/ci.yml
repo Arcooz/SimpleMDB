@@ -1,0 +1,105 @@
+name: SimpleMDB CI-CD
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/smdb-api
+
+    steps:
+      # ----------------------------------------------------------------------
+      # 1. Recreate the sibling folder structure used on your local machine
+      #    projects/
+      #      SharedLibrary/
+      #      SimpleMDB/
+      # ----------------------------------------------------------------------
+      - name: Prepare folder structure
+        run: |
+          mkdir -p projects
+
+      # ----------------------------------------------------------------------
+      # Checkout SimpleMDB repo into projects/SimpleMDB (THIS REPO)
+      # ----------------------------------------------------------------------
+      - name: Checkout Web App (SimpleMDB)
+        uses: actions/checkout@v4
+        with:
+          path: projects/SimpleMDB
+
+      # ----------------------------------------------------------------------
+      # Checkout SharedLibrary repo into projects/SharedLibrary (THE OTHER REPO)
+      # ----------------------------------------------------------------------
+      - name: Checkout Shared Library (SharedLibrary)
+        uses: actions/checkout@v4
+        with:
+          repository: hbruckman/SharedLibrary
+          token: ${{ secrets.SL_ACCESS_TOKEN }}
+          path: projects/SharedLibrary
+
+      # ----------------------------------------------------------------------
+      # 2. Setup .NET SDK (same version you use locally)
+      # ----------------------------------------------------------------------
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # ----------------------------------------------------------------------
+      # 3. Restore, build, test
+      # ----------------------------------------------------------------------
+      - name: Restore
+        working-directory: projects/SimpleMDB
+        run: dotnet restore
+
+      - name: Build
+        working-directory: projects/SimpleMDB
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        working-directory: projects/SimpleMDB
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+      # ----------------------------------------------------------------------
+      # 4. Publish the Web App (Smdb.Api)
+      # ----------------------------------------------------------------------
+      - name: Publish Web App
+        working-directory: projects/SimpleMDB
+        run: dotnet publish src/Smdb.Api/Smdb.Api.csproj -c Release -o ./publish
+
+      # ------------------------------------------------------------------
+      # 5. Login to GitHub Container Registry (GHCR)
+      #    Uses the built-in GITHUB_TOKEN for auth
+      # ------------------------------------------------------------------
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # ------------------------------------------------------------------
+      # 6. Build and push Docker image based on the published output
+      # ------------------------------------------------------------------
+      - name: Build and push Docker image
+        working-directory: projects/SimpleMDB
+        run: |
+          docker build -t $IMAGE_NAME:latest -f Dockerfile .
+          docker push $IMAGE_NAME:latest
+
+      # ----------------------------------------------------------------------
+      # 7. Deploy to Azure App Service
+      # ----------------------------------------------------------------------
+      - name: Deploy to Azure WebApp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'smdbc-ECG'                 # <-- CHANGE THIS
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          images: ${{ env.IMAGE_NAME }}:latest
+          #package: projects/SimpleMDB/publish
