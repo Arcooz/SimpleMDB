@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      IMAGE_NAME: ghcr.io/Arcooz/smdb-api
+      IMAGE_NAME: ghcr.io/arcooz/smdb-api
 
     steps:
       # ----------------------------------------------------------------------
